@@ -25,8 +25,9 @@ extension String {
     }
 
 	func unicodeScalar(_ i: Int) -> UnicodeScalar {
-		return self.unicodeScalars.prefix(i+1).last!
-	}
+        let ix = unicodeScalars.index(unicodeScalars.startIndex, offsetBy: i)
+		return unicodeScalars[ix]
+    }
 
 	func string(_ offset: Int, _ count: Int) -> String {
 		let truncStart = self.unicodeScalars.count-offset
@@ -55,7 +56,7 @@ extension String {
 	func startsWith(_ string: String) -> Bool {
         return self.hasPrefix(string)
     }
-
+    
 	func indexOf(_ substring: String, _ offset: Int ) -> Int {
         if(offset > count) {return -1}
 
@@ -81,12 +82,22 @@ extension String {
     }
 
     func trim() -> String {
-        return trimmingCharacters(in: NSCharacterSet.whitespacesAndNewlines)
+        // trimmingCharacters() in the stdlib is not very efficiently
+        // implemented, perhaps because it always creates a new string.
+        // Avoid actually calling it if it's not needed.
+        guard count > 0 else { return self }
+        let (firstChar, lastChar) = (first!, last!)
+        if firstChar.isWhitespace || lastChar.isWhitespace || firstChar == "\n" || lastChar == "\n" {
+            return trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        return self
     }
 
     func equalsIgnoreCase(string: String?) -> Bool {
-		if(string == nil) {return false}
-        return string!.lowercased() == lowercased()
+        if let string = string {
+            return caseInsensitiveCompare(string) == .orderedSame
+        }
+        return false
     }
 
     static func toHexString(n: Int) -> String {
@@ -109,14 +120,15 @@ extension String {
         return String.split(self, beginIndex, count)
     }
 
-    func regionMatches(_ ignoreCase: Bool, _ selfOffset: Int, _ other: String, _ otherOffset: Int, _ length: Int ) -> Bool {
+    func regionMatches(ignoreCase: Bool, selfOffset: Int,
+                       other: String, otherOffset: Int, targetLength: Int ) -> Bool {
         if ((otherOffset < 0) || (selfOffset < 0)
-            || (selfOffset > self.count - length)
-            || (otherOffset > other.count - length)) {
+            || (selfOffset > self.count - targetLength)
+            || (otherOffset > other.count - targetLength)) {
             return false
         }
 
-        for i in 0..<length {
+        for i in 0..<targetLength {
             let charSelf: Character = self[i+selfOffset]
             let charOther: Character = other[i+otherOffset]
             if(ignoreCase) {
@@ -201,6 +213,52 @@ extension String.Encoding {
             case String.Encoding.utf32LittleEndian: return "UTF-32LE"
         default:
             return self.description
+        }
+    }
+
+    /// Errors that are thrown when a ``String.Encoding`` fails to be represented as a MIME type.
+    public enum EncodingMIMETypeError: Error, LocalizedError {
+        /// There is no IANA equivalent of the provided string encoding.
+        case noIANAEquivalent(String.Encoding)
+
+        /// Returns a human-readable representation of this error.
+        public var errorDescription: String? {
+            switch self {
+            case .noIANAEquivalent(let encoding):
+                return String("There is no IANA equivalent for \(encoding)")
+            }
+        }
+    }
+
+    /// Returns the encoding as an equivalent IANA MIME name.
+    ///
+    /// - SeeAlso: https://www.iana.org/assignments/character-sets/character-sets.xhtml
+    /// - Throws: EncodingMIMETypeError if there is no IANA-compatible MIME name.
+    public func mimeName() throws -> String {
+        switch self {
+            case .ascii: return "US-ASCII"
+            case .nextstep: throw EncodingMIMETypeError.noIANAEquivalent(self)
+            case .japaneseEUC: return "EUC-JP"
+            case .utf8: return "UTF-8"
+            case .isoLatin1: return "csISOLatin1"
+            case .symbol: throw EncodingMIMETypeError.noIANAEquivalent(self)
+            case .nonLossyASCII: return "US-ASCII"
+            case .shiftJIS: return "Shift_JIS"
+            case .isoLatin2: return "csISOLatin2"
+            case .windowsCP1251: return "windows-1251"
+            case .windowsCP1252: return "windows-1252"
+            case .windowsCP1253: return "windows-1253"
+            case .windowsCP1254: return "windows-1254"
+            case .windowsCP1250: return "windows-1250"
+            case .iso2022JP: return "csISO2022JP"
+            case .macOSRoman: throw EncodingMIMETypeError.noIANAEquivalent(self)
+            case .utf16: return "UTF-16"
+            case .utf16BigEndian: return "UTF-16BE"
+            case .utf16LittleEndian: return "UTF-16LE"
+            case .utf32: return "UTF-32"
+            case .utf32BigEndian: return "UTF-32BE"
+            case .utf32LittleEndian: return "UTF-32LE"
+            default: throw EncodingMIMETypeError.noIANAEquivalent(self)
         }
     }
 }

@@ -30,6 +30,17 @@ class ElementsTest: XCTestCase {
 		try XCTAssertEqual("There", els.get(1).text())
 	}
 
+	func testRandomAccessCollection()throws {
+		let h: String = "<div><p>one</p><div class=headline><p>two</p><p>three</p></div><p>four</p></div>"
+		let doc: Document = try SwiftSoup.parse(h)
+		let els: Elements = try doc.select("p")
+		XCTAssertEqual(els.count, 4)
+		for i in (els.startIndex ..< els.endIndex).shuffled() {
+			let el = els[i]
+			XCTAssertEqual(el.tag().getName(), "p")
+		}
+	}
+
 	func testAttributes()throws {
 		let h = "<p title=foo><p title=bar><p class=foo><p class=bar>"
 		let doc: Document = try SwiftSoup.parse(h)
@@ -57,7 +68,7 @@ class ElementsTest: XCTestCase {
 	}
 
 	func testHasAbsAttr()throws {
-		let doc: Document = try SwiftSoup.parse("<a id=1 href='/foo'>One</a> <a id=2 href='https://jsoup.org'>Two</a>")
+		let doc: Document = try SwiftSoup.parse("<a id=1 href='/foo'>One</a> <a id=2 href='https://google.com'>Two</a>")
 		let one: Elements = try doc.select("#1")
 		let two: Elements = try doc.select("#2")
 		let both: Elements = try doc.select("a")
@@ -73,14 +84,14 @@ class ElementsTest: XCTestCase {
 	}
 
 	func testAbsAttr()throws {
-		let doc: Document = try SwiftSoup.parse("<a id=1 href='/foo'>One</a> <a id=2 href='https://jsoup.org'>Two</a>")
+		let doc: Document = try SwiftSoup.parse("<a id=1 href='/foo'>One</a> <a id=2 href='https://google.com'>Two</a>")
 		let one: Elements = try doc.select("#1")
 		let two: Elements = try doc.select("#2")
 		let both: Elements = try doc.select("a")
 
 		XCTAssertEqual("", try one.attr("abs:href"))
-		XCTAssertEqual("https://jsoup.org", try two.attr("abs:href"))
-		XCTAssertEqual("https://jsoup.org", try both.attr("abs:href"))
+		XCTAssertEqual("https://google.com", try two.attr("abs:href"))
+		XCTAssertEqual("https://google.com", try both.attr("abs:href"))
 	}
 
 	func testClasses()throws {
@@ -147,29 +158,29 @@ class ElementsTest: XCTestCase {
 	}
 
 	func testBefore()throws {
-		let doc: Document = try SwiftSoup.parse("<p>This <a>is</a> <a>jsoup</a>.</p>")
+		let doc: Document = try SwiftSoup.parse("<p>This <a>is</a> <a>SwiftSoup</a>.</p>")
 		try doc.select("a").before("<span>foo</span>")
-		XCTAssertEqual("<p>This <span>foo</span><a>is</a> <span>foo</span><a>jsoup</a>.</p>", try TextUtil.stripNewlines(doc.body()!.html()))
+		XCTAssertEqual("<p>This <span>foo</span><a>is</a> <span>foo</span><a>SwiftSoup</a>.</p>", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
 
 	func testAfter()throws {
-		let doc: Document = try SwiftSoup.parse("<p>This <a>is</a> <a>jsoup</a>.</p>")
+		let doc: Document = try SwiftSoup.parse("<p>This <a>is</a> <a>SwiftSoup</a>.</p>")
 		try doc.select("a").after("<span>foo</span>")
-		XCTAssertEqual("<p>This <a>is</a><span>foo</span> <a>jsoup</a><span>foo</span>.</p>", try TextUtil.stripNewlines(doc.body()!.html()))
+		XCTAssertEqual("<p>This <a>is</a><span>foo</span> <a>SwiftSoup</a><span>foo</span>.</p>", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
 
 	func testWrap()throws {
-		let h = "<p><b>This</b> is <b>jsoup</b></p>"
+		let h = "<p><b>This</b> is <b>SwiftSoup</b></p>"
 		let doc: Document = try SwiftSoup.parse(h)
 		try doc.select("b").wrap("<i></i>")
-		XCTAssertEqual("<p><i><b>This</b></i> is <i><b>jsoup</b></i></p>", try doc.body()?.html())
+		XCTAssertEqual("<p><i><b>This</b></i> is <i><b>SwiftSoup</b></i></p>", try doc.body()?.html())
 	}
 
 	func testWrapDiv()throws {
-		let h = "<p><b>This</b> is <b>jsoup</b>.</p> <p>How do you like it?</p>"
+		let h = "<p><b>This</b> is <b>SwiftSoup</b>.</p> <p>How do you like it?</p>"
 		let doc: Document = try SwiftSoup.parse(h)
 		try doc.select("p").wrap("<div></div>")
-		XCTAssertEqual("<div><p><b>This</b> is <b>jsoup</b>.</p></div> <div><p>How do you like it?</p></div>", try TextUtil.stripNewlines(doc.body()!.html()))
+		XCTAssertEqual("<div><p><b>This</b> is <b>SwiftSoup</b>.</p></div> <div><p>How do you like it?</p></div>", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
 
 	func testUnwrap()throws {
@@ -202,11 +213,11 @@ class ElementsTest: XCTestCase {
 	}
 
 	func testRemove()throws {
-		let doc: Document = try SwiftSoup.parse("<div><p>Hello <b>there</b></p> jsoup <p>now!</p></div>")
+		let doc: Document = try SwiftSoup.parse("<div><p>Hello <b>there</b></p> SwiftSoup <p>now!</p></div>")
 		doc.outputSettings().prettyPrint(pretty: false)
 
 		try doc.select("p").remove()
-		XCTAssertEqual("<div> jsoup </div>", try doc.body()?.html())
+		XCTAssertEqual("<div> SwiftSoup </div>", try doc.body()?.html())
 	}
 
 	func testEq()throws {
@@ -292,11 +303,30 @@ class ElementsTest: XCTestCase {
 		XCTAssertEqual(1, els.size())
 		try XCTAssertEqual("Check", els.text())
 	}
+    
+    func testEachText()throws {
+        let doc: Document = try SwiftSoup.parse("<div><p>1<p>2<p>3<p>4<p>5<p>6</div><div><p>7<p>8<p>9<p>10<p>11<p>12<p></p></div>")
+        let divText: Array<String> = try doc.select("div").eachText();
+        XCTAssertEqual(2, divText.count);
+        XCTAssertEqual("1 2 3 4 5 6", divText[0]);
+        XCTAssertEqual("7 8 9 10 11 12", divText[1]);
+        
+        let pText: Array<String> = try doc.select("p").eachText();
+        let ps: Elements = try doc.select("p");
+        XCTAssertEqual(13, ps.size());
+        XCTAssertEqual(12, pText.count); // not 13, as last doesn't have text
+        XCTAssertEqual("1", pText[0]);
+        XCTAssertEqual("2", pText[1]);
+        XCTAssertEqual("5", pText[4]);
+        XCTAssertEqual("7", pText[6]);
+        XCTAssertEqual("12", pText[11]);
+    }
 
 	static var allTests = {
 		return [
             ("testLinuxTestSuiteIncludesAllTests", testLinuxTestSuiteIncludesAllTests),
             ("testFilter", testFilter),
+			("testRandomAccessCollection", testRandomAccessCollection),
 			("testAttributes", testAttributes),
 			("testHasAttr", testHasAttr),
 			("testHasAbsAttr", testHasAbsAttr),
@@ -325,7 +355,8 @@ class ElementsTest: XCTestCase {
 			("testTagNameSet", testTagNameSet),
 			("testTraverse", testTraverse),
 			("testForms", testForms),
-			("testClassWithHyphen", testClassWithHyphen)
+			("testClassWithHyphen", testClassWithHyphen),
+            ("testEachText", testEachText)
 		]
 	}()
 }

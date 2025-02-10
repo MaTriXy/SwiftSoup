@@ -19,11 +19,11 @@ class HtmlParserTest: XCTestCase {
             let thisClass = type(of: self)
             let linuxCount = thisClass.allTests.count
             let darwinCount = Int(thisClass.defaultTestSuite.testCaseCount)
-            XCTAssertEqual(linuxCount, darwinCount, "\(darwinCount - linuxCount) tests are missing from allTests")
+        XCTAssertEqual(linuxCount, darwinCount, "\(darwinCount - linuxCount) tests are missing from allTests: \(thisClass.defaultTestSuite.tests.filter { test in !thisClass.allTests.contains(where: { $0.0 == String(test.name.split(separator: " ")[1].dropLast(1)) }) })")
         #endif
     }
 
-	func testParsesSimpleDocument()throws {
+	func testParsesSimpleDocument() throws {
 		let html: String = "<html><head><title>First!</title></head><body><p>First post! <img src=\"foo.png\" /></p></body></html>"
 		let doc: Document = try SwiftSoup.parse(html)
 		// need a better way to verify these:
@@ -120,7 +120,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testCreatesDocumentStructure()throws {
-		let html = "<meta name=keywords /><link rel=stylesheet /><title>jsoup</title><p>Hello world</p>"
+		let html = "<meta name=keywords /><link rel=stylesheet /><title>SwiftSoup</title><p>Hello world</p>"
 		let doc = try SwiftSoup.parse(html)
 		let head: Element = doc.head()!
 		let body: Element = doc.body()!
@@ -132,7 +132,7 @@ class HtmlParserTest: XCTestCase {
 
 		XCTAssertEqual("keywords", try head.getElementsByTag("meta").get(0).attr("name"))
 		XCTAssertEqual(0, try body.getElementsByTag("meta").size())
-		XCTAssertEqual("jsoup", try  doc.title())
+		XCTAssertEqual("SwiftSoup", try  doc.title())
 		XCTAssertEqual("Hello world", try body.text())
 		XCTAssertEqual("Hello world", try body.children().get(0).text())
 	}
@@ -202,7 +202,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testDoesNotCreateImplicitLists()throws {
-		// old jsoup used to wrap this in <ul>, but that's not to spec
+		// old SwiftSoup used to wrap this in <ul>, but that's not to spec
 		let h: String = "<li>Point one<li>Point two"
 		let doc: Document = try SwiftSoup.parse(h)
 		let ol: Elements = try doc.select("ul") // should NOT have created a default ul.
@@ -223,7 +223,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testDiscardsNakedTds()throws {
-		// jsoup used to make this into an implicit table; but browsers make it into a text run
+		// SwiftSoup used to make this into an implicit table; but browsers make it into a text run
 		let h: String = "<td>Hello<td><p>There<p>now"
 		let doc: Document = try SwiftSoup.parse(h)
 		XCTAssertEqual("Hello<p>There</p><p>now</p>", try TextUtil.stripNewlines(doc.body()!.html()))
@@ -238,7 +238,7 @@ class HtmlParserTest: XCTestCase {
 	func testHandlesWhatWgExpensesTableExample()throws {
 		// http://www.whatwg.org/specs/web-apps/current-work/multipage/tabular-data.html#examples-0
 		let doc = try SwiftSoup.parse("<table> <colgroup> <col> <colgroup> <col> <col> <col> <thead> <tr> <th> <th>2008 <th>2007 <th>2006 <tbody> <tr> <th scope=rowgroup> Research and development <td> $ 1,109 <td> $ 782 <td> $ 712 <tr> <th scope=row> Percentage of net sales <td> 3.4% <td> 3.3% <td> 3.7% <tbody> <tr> <th scope=rowgroup> Selling, general, and administrative <td> $ 3,761 <td> $ 2,963 <td> $ 2,433 <tr> <th scope=row> Percentage of net sales <td> 11.6% <td> 12.3% <td> 12.6% </table>")
-		XCTAssertEqual("<table> <colgroup> <col> </colgroup><colgroup> <col> <col> <col> </colgroup><thead> <tr> <th> </th><th>2008 </th><th>2007 </th><th>2006 </th></tr></thead><tbody> <tr> <th scope=\"rowgroup\"> Research and development </th><td> $ 1,109 </td><td> $ 782 </td><td> $ 712 </td></tr><tr> <th scope=\"row\"> Percentage of net sales </th><td> 3.4% </td><td> 3.3% </td><td> 3.7% </td></tr></tbody><tbody> <tr> <th scope=\"rowgroup\"> Selling, general, and administrative </th><td> $ 3,761 </td><td> $ 2,963 </td><td> $ 2,433 </td></tr><tr> <th scope=\"row\"> Percentage of net sales </th><td> 11.6% </td><td> 12.3% </td><td> 12.6% </td></tr></tbody></table>", try TextUtil.stripNewlines(doc.body()!.html()))
+		XCTAssertEqual("<table> <colgroup> <col /> </colgroup><colgroup> <col /> <col /> <col /> </colgroup><thead> <tr> <th> </th><th>2008 </th><th>2007 </th><th>2006 </th></tr></thead><tbody> <tr> <th scope=\"rowgroup\"> Research and development </th><td> $ 1,109 </td><td> $ 782 </td><td> $ 712 </td></tr><tr> <th scope=\"row\"> Percentage of net sales </th><td> 3.4% </td><td> 3.3% </td><td> 3.7% </td></tr></tbody><tbody> <tr> <th scope=\"rowgroup\"> Selling, general, and administrative </th><td> $ 3,761 </td><td> $ 2,963 </td><td> $ 2,433 </td></tr><tr> <th scope=\"row\"> Percentage of net sales </th><td> 11.6% </td><td> 12.3% </td><td> 12.6% </td></tr></tbody></table>", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
 
 	func testHandlesTbodyTable()throws {
@@ -347,8 +347,26 @@ class HtmlParserTest: XCTestCase {
 		// if a known tag, allow self closing outside of spec, but force an end tag. unknown tags can be self closing.
 		let h = "<div id='1' /><script src='/foo' /><div id=2><img /><img></div><a id=3 /><i /><foo /><foo>One</foo> <hr /> hr text <hr> hr text two"
 		let doc = try SwiftSoup.parse(h)
-		XCTAssertEqual("<div id=\"1\"></div><script src=\"/foo\"></script><div id=\"2\"><img><img></div><a id=\"3\"></a><i></i><foo /><foo>One</foo> <hr> hr text <hr> hr text two", try TextUtil.stripNewlines(doc.body()!.html()))
+		XCTAssertEqual("<div id=\"1\"></div><script src=\"/foo\"></script><div id=\"2\"><img /><img /></div><a id=\"3\"></a><i></i><foo /><foo>One</foo> <hr /> hr text <hr /> hr text two", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
+    
+    func testHandlesKnownEmptyNoFrames() throws {
+        let h = "<html><head><noframes /><meta name=foo></head><body>One</body></html>";
+        let doc = try SwiftSoup.parse(h);
+        XCTAssertEqual("<html><head><noframes></noframes><meta name=\"foo\" /></head><body>One</body></html>", try TextUtil.stripNewlines(doc.html()));
+    }
+    
+    func testHandlesKnownEmptyStyle() throws {
+        let h = "<html><head><style /><meta name=foo></head><body>One</body></html>";
+        let doc = try SwiftSoup.parse(h);
+        XCTAssertEqual("<html><head><style></style><meta name=\"foo\" /></head><body>One</body></html>", try TextUtil.stripNewlines(doc.html()));
+    }
+
+    func testHandlesKnownEmptyTitle() throws {
+        let h = "<html><head><title /><meta name=foo></head><body>One</body></html>";
+        let doc = try SwiftSoup.parse(h);
+        XCTAssertEqual("<html><head><title></title><meta name=\"foo\" /></head><body>One</body></html>", try TextUtil.stripNewlines(doc.html()));
+    }
 
 	func testHandlesSolidusAtAttributeEnd()throws {
 		// this test makes sure [<a href=/>link</a>] is parsed as [<a href="/">link</a>], not [<a href="" /><a>link</a>]
@@ -365,7 +383,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testHandlesUnclosedDefinitionLists()throws {
-		// jsoup used to create a <dl>, but that's not to spec
+		// SwiftSoup used to create a <dl>, but that's not to spec
 		let h: String = "<dt>Foo<dd>Bar<dt>Qux<dd>Zug"
 		let doc = try SwiftSoup.parse(h)
 		XCTAssertEqual(0, try doc.select("dl").size()) // no auto dl
@@ -387,7 +405,7 @@ class HtmlParserTest: XCTestCase {
 	func testHandlesFrames()throws {
 		let h = "<html><head><script></script><noscript></noscript></head><frameset><frame src=foo></frame><frame src=foo></frameset></html>"
 		let doc = try SwiftSoup.parse(h)
-		XCTAssertEqual("<html><head><script></script><noscript></noscript></head><frameset><frame src=\"foo\"><frame src=\"foo\"></frameset></html>",
+		XCTAssertEqual("<html><head><script></script><noscript></noscript></head><frameset><frame src=\"foo\" /><frame src=\"foo\" /></frameset></html>",
 		               try TextUtil.stripNewlines(doc.html()))
 		// no body auto vivification
 	}
@@ -395,7 +413,7 @@ class HtmlParserTest: XCTestCase {
 	func testIgnoresContentAfterFrameset()throws {
 		let h = "<html><head><title>One</title></head><frameset><frame /><frame /></frameset><table></table></html>"
 		let doc = try SwiftSoup.parse(h)
-		XCTAssertEqual("<html><head><title>One</title></head><frameset><frame><frame></frameset></html>", try TextUtil.stripNewlines(doc.html()))
+		XCTAssertEqual("<html><head><title>One</title></head><frameset><frame /><frame /></frameset></html>", try TextUtil.stripNewlines(doc.html()))
 		// no body, no table. No crash!
 	}
 
@@ -419,7 +437,7 @@ class HtmlParserTest: XCTestCase {
 	func testNormalisesDocument()throws {
 		let h = "<!doctype html>One<html>Two<head>Three<link></head>Four<body>Five </body>Six </html>Seven "
 		let doc = try SwiftSoup.parse(h)
-		XCTAssertEqual("<!doctype html><html><head></head><body>OneTwoThree<link>FourFive Six Seven </body></html>",
+		XCTAssertEqual("<!doctype html><html><head></head><body>OneTwoThree<link />FourFive Six Seven </body></html>",
 		               try TextUtil.stripNewlines(doc.html()))
 	}
 
@@ -448,7 +466,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testHgroup()throws {
-		// jsoup used to not allow hroup in h{n}, but that's not in spec, and browsers are OK
+		// SwiftSoup used to not allow hroup in h{n}, but that's not in spec, and browsers are OK
 		let doc = try SwiftSoup.parse("<h1>Hello <h2>There <hgroup><h1>Another<h2>headline</hgroup> <hgroup><h1>More</h1><p>stuff</p></hgroup>")
 		XCTAssertEqual("<h1>Hello </h1><h2>There <hgroup><h1>Another</h1><h2>headline</h2></hgroup> <hgroup><h1>More</h1><p>stuff</p></hgroup></h2>", try TextUtil.stripNewlines(doc.body()!.html()))
 	}
@@ -472,7 +490,7 @@ class HtmlParserTest: XCTestCase {
 	}
 
 	func testNoImagesInNoScriptInHead()throws {
-		// jsoup used to allow, but against spec if parsing with noscript
+		// SwiftSoup used to allow, but against spec if parsing with noscript
 		let doc = try SwiftSoup.parse("<html><head><noscript><img src='foo'></noscript></head><body><p>Hello</p></body></html>")
 		XCTAssertEqual("<html><head><noscript>&lt;img src=\"foo\"&gt;</noscript></head><body><p>Hello</p></body></html>", try TextUtil.stripNewlines(doc.html()))
 	}
@@ -663,7 +681,10 @@ class HtmlParserTest: XCTestCase {
 			("testcommentBeforeHtml", testcommentBeforeHtml),
 			("testemptyTdTag", testemptyTdTag),
 			("testhandlesSolidusInA", testhandlesSolidusInA),
-			("testhandlesSpanInTbody", testhandlesSpanInTbody)
+			("testhandlesSpanInTbody", testhandlesSpanInTbody),
+            ("testHandlesKnownEmptyNoFrames", testHandlesKnownEmptyNoFrames),
+            ("testHandlesKnownEmptyStyle", testHandlesKnownEmptyStyle),
+            ("testHandlesKnownEmptyTitle", testHandlesKnownEmptyTitle),
 		]
 	}()
 

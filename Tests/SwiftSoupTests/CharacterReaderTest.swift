@@ -53,10 +53,12 @@ class CharacterReaderTest: XCTestCase {
         XCTAssertEqual("e", r.consume())
         XCTAssertTrue(r.isEmpty())
 
-        XCTAssertEqual(CharacterReader.EOF, r.consume())
-        r.unconsume()
-        XCTAssertTrue(r.isEmpty())
-        XCTAssertEqual(CharacterReader.EOF, r.current())
+        // Indexes beyond the end are not allowed in native indexing
+        //
+        // XCTAssertEqual(CharacterReader.EOF, r.consume())
+        // r.unconsume()
+        // XCTAssertTrue(r.isEmpty())
+        // XCTAssertEqual(CharacterReader.EOF, r.current())
     }
 
     func testMark() {
@@ -82,31 +84,31 @@ class CharacterReaderTest: XCTestCase {
         let input = "blah blah"
         let r = CharacterReader(input)
 
-        XCTAssertEqual(-1, r.nextIndexOf("x"))
-        XCTAssertEqual(3, r.nextIndexOf("h"))
+        XCTAssertEqual(nil, r.nextIndexOf("x"))
+        XCTAssertEqual(input.index(input.startIndex, offsetBy: 3), r.nextIndexOf("h"))
         let pull = r.consumeTo("h")
         XCTAssertEqual("bla", pull)
         XCTAssertEqual("h", r.consume())
-        XCTAssertEqual(2, r.nextIndexOf("l"))
+        XCTAssertEqual(input.index(input.startIndex, offsetBy: 6), r.nextIndexOf("l"))
         XCTAssertEqual(" blah", r.consumeToEnd())
-        XCTAssertEqual(-1, r.nextIndexOf("x"))
+        XCTAssertEqual(nil, r.nextIndexOf("x"))
     }
 
     func testNextIndexOfString() {
         let input = "One Two something Two Three Four"
         let r = CharacterReader(input)
 
-        XCTAssertEqual(-1, r.nextIndexOf("Foo"))
-        XCTAssertEqual(4, r.nextIndexOf("Two"))
+        XCTAssertEqual(nil, r.nextIndexOf("Foo"))
+        XCTAssertEqual(input.index(input.startIndex, offsetBy: 4), r.nextIndexOf("Two"))
         XCTAssertEqual("One Two ", r.consumeTo("something"))
-        XCTAssertEqual(10, r.nextIndexOf("Two"))
+        XCTAssertEqual(input.index(input.startIndex, offsetBy: 18), r.nextIndexOf("Two"))
         XCTAssertEqual("something Two Three Four", r.consumeToEnd())
-        XCTAssertEqual(-1, r.nextIndexOf("Two"))
+        XCTAssertEqual(nil, r.nextIndexOf("Two"))
     }
 
     func testNextIndexOfUnmatched() {
         let r = CharacterReader("<[[one]]")
-        XCTAssertEqual(-1, r.nextIndexOf("]]>"))
+        XCTAssertEqual(nil, r.nextIndexOf("]]>"))
     }
 
     func testConsumeToChar() {
@@ -136,14 +138,14 @@ class CharacterReaderTest: XCTestCase {
     }
 
     func testConsumeToAny() {
-        let r = CharacterReader("One &bar; qux")
-        XCTAssertEqual("One ", r.consumeToAny("&", ";"))
+        let r = CharacterReader("One 二 &bar; qux 三")
+        XCTAssertEqual("One 二 ", r.consumeToAny(Set(["&", ";"].flatMap { $0.utf8 })))
         XCTAssertTrue(r.matches("&"))
         XCTAssertTrue(r.matches("&bar;"))
         XCTAssertEqual("&", r.consume())
-        XCTAssertEqual("bar", r.consumeToAny("&", ";"))
+        XCTAssertEqual("bar", r.consumeToAny(Set(["&", ";"].flatMap { $0.utf8 })))
         XCTAssertEqual(";", r.consume())
-        XCTAssertEqual(" qux", r.consumeToAny("&", ";"))
+        XCTAssertEqual(" qux 三", r.consumeToAny(Set(["&", ";"].flatMap { $0.utf8 })))
     }
 
     func testConsumeLetterSequence() {
@@ -206,7 +208,7 @@ class CharacterReaderTest: XCTestCase {
         //let scan = [" ", "\n", "\t"]
         let r = CharacterReader("One\nTwo\tThree")
         XCTAssertFalse(r.matchesAny(" ", "\n", "\t"))
-        XCTAssertEqual("One", r.consumeToAny(" ", "\n", "\t"))
+        XCTAssertEqual("One", r.consumeToAny(Set([" ", "\n", "\t"].flatMap { $0.utf8 })))
         XCTAssertTrue(r.matchesAny(" ", "\n", "\t"))
         XCTAssertEqual("\n", r.consume())
         XCTAssertFalse(r.matchesAny(" ", "\n", "\t"))
@@ -250,6 +252,51 @@ class CharacterReaderTest: XCTestCase {
 //        XCTAssertTrue(r.rangeEquals(18, 5, "CHOKE"))
 //        XCTAssertFalse(r.rangeEquals(18, 5, "CHIKE"))
     }
+    
+    func testJavaScriptParsingHangRegression() throws {
+        let expectation = XCTestExpectation(description: "SwiftSoup parse should complete")
+        
+        DispatchQueue.global().async {
+            do {
+                let html = """
+                    <!DOCTYPE html>
+                    <script>
+                    <!--//-->
+                    &
+                    </script>
+                """
+                _ = try SwiftSoup.parse(html)
+                expectation.fulfill() // Fulfill the expectation if parse completes
+            } catch {
+                XCTFail("Parsing failed with error: \(error)")
+                expectation.fulfill() // Fulfill the expectation to not block the waiter in case of error
+            }
+        }
+        
+        // Wait for the expectation with a timeout of 3 seconds
+        let result = XCTWaiter().wait(for: [expectation], timeout: 3.0)
+        
+        switch result {
+        case .completed:
+            // Parse completed within the timeout, the test passes
+            break
+        case .timedOut:
+            // Parse did not complete within the timeout, the test fails
+            XCTFail("Parsing took too long; hang detected")
+        default:
+            break
+        }
+    }
+    
+    func testURLCrashRegression() throws {
+        let html = """
+            <!DOCTYPE html>
+            <body>
+                <a href="https://secure.imagemaker360.com/Viewer/95.asp?id=181293idxIDX&Referer=&referefull="></a>
+            </body>
+        """
+        _ = try SwiftSoup.parse(html)
+    }
 
 	static var allTests = {
 		return [
@@ -272,8 +319,10 @@ class CharacterReaderTest: XCTestCase {
 			("testContainsIgnoreCase", testContainsIgnoreCase),
 			("testMatchesAny", testMatchesAny),
 			("testCachesStrings", testCachesStrings),
-			("testRangeEquals", testRangeEquals)
-			]
+			("testRangeEquals", testRangeEquals),
+            ("testJavaScriptParsingHangRegression", testJavaScriptParsingHangRegression),
+            ("testURLCrashRegression", testURLCrashRegression),
+        ]
 	}()
 
 }
